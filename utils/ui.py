@@ -1,7 +1,4 @@
-# utils/ui.py
 import streamlit as st
-from pathlib import Path
-import yaml
 
 def inject_css():
     st.markdown(
@@ -26,16 +23,6 @@ def inject_css():
         unsafe_allow_html=True,
     )
 
-def load_info_wilayah():
-    cfg = Path(__file__).resolve().parent.parent / "config" / "info_wilayah.yaml"
-    import yaml
-    with open(cfg, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
-
 def header():
-    info = load_info_wilayah()
-    desa = info.get("desa")
-    dusun = info.get("dusun")
-    rw = info.get("rw", {})
-    st.markdown(f"### 🏘️ Bank Data RW {rw.get('nomor', '')} — {desa}, {dusun}")
-    st.caption(f"Kepala Dusun: {info.get('kepala_dusun')} · Ketua RW: {rw.get('ketua_rw')}")
+    st.markdown("# Bank Data RW 02")
+    st.caption("Aplikasi untuk mengelola data KK dan Anggota Keluarga di RW 02, Desa Simogirang.")
