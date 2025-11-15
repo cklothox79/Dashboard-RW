@@ -1,0 +1,15 @@
+desa: "Simogirang"
+dusun: "Klotok"
+kepala_dusun: "Nova"
+
+rw:
+  nomor: "02"
+  ketua_rw: "Joyo Mulyo"
+
+rt:
+  - nomor: 1
+    ketua: "Riaji"
+  - nomor: 2
+    ketua: "Mujiono"
+  - nomor: 3
+    ketua: "Sanadi"
