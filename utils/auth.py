@@ -1,4 +1,3 @@
-# utils/auth.py
 import yaml
 from pathlib import Path
 
