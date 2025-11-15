@@ -1,18 +1,62 @@
 import streamlit as st
 import pandas as pd
 from utils.loader import load_rt, save_rt
+from utils.auth import check_password
+from utils.ui import inject_css, header
 from datetime import datetime
 
-# Fungsi untuk menampilkan header aplikasi
-def header():
-    st.title("Input Data Kartu Keluarga (KK) RW 02")
-    st.subheader("Formulir Input Kartu Keluarga dan Anggota Keluarga")
+# Set page configuration
+st.set_page_config(page_title="Bank Data RW 02", layout="wide", page_icon="🏘️")
 
-# Fungsi untuk input data KK
+# Inject custom CSS
+inject_css()
+
+# Header
+header()
+
+# Login untuk proteksi password
+def password_page():
+    st.subheader("Masukkan Password untuk Akses Data")
+    password = st.text_input("Password", type="password")
+    if password:
+        role = check_password(password)
+        if role:
+            st.session_state["role"] = role
+            st.success(f"Akses diberikan untuk {role}")
+        else:
+            st.error("Password salah!")
+
+if "role" not in st.session_state:
+    password_page()
+
+else:
+    # Sidebar navigasi
+    st.sidebar.header("Navigasi")
+    page = st.sidebar.radio("Pilih Halaman", ["Dashboard", "Input Data KK", "Input Anggota Keluarga", "Lihat Data"])
+
+    rt_key = st.sidebar.radio("Pilih RT", ["rt1", "rt2", "rt3"])
+
+    if page == "Dashboard":
+        st.title("Dashboard Data")
+        st.write("Menampilkan statistik umum atau data terkait lainnya.")
+        df = load_rt(rt_key)
+        st.dataframe(df)
+
+    elif page == "Input Data KK":
+        input_kk(rt_key)
+
+    elif page == "Input Anggota Keluarga":
+        input_anggota(rt_key)
+
+    elif page == "Lihat Data":
+        df = load_rt(rt_key)
+        st.subheader(f"Data KK dan Anggota Keluarga RT {rt_key}")
+        st.dataframe(df)
+
+# Input data KK
 def input_kk(rt_key: str):
     st.subheader(f"Input Data KK untuk RT {rt_key}")
-    
-    # Formulir KK
+
     with st.form(key=f"kk_form", clear_on_submit=True):
         no_kk = st.text_input("Nomor KK")
         nama_kepala_keluarga = st.text_input("Nama Kepala Keluarga")
@@ -25,11 +69,10 @@ def input_kk(rt_key: str):
         kabupaten_kota = st.text_input("Kabupaten/Kota")
         provinsi = st.text_input("Provinsi")
         tanggal_dikeluarkan = st.date_input("Tanggal Dikeluarkan")
-        
+
         submit_button = st.form_submit_button("Simpan Kartu Keluarga")
-        
+
         if submit_button:
-            # Simpan data KK di CSV
             kk_data = {
                 "no_kk": no_kk,
                 "nama_kepala_keluarga": nama_kepala_keluarga,
@@ -49,10 +92,10 @@ def input_kk(rt_key: str):
             save_rt(rt_key, df)
             st.success("Data Kartu Keluarga berhasil disimpan!")
 
-# Fungsi untuk input data anggota keluarga
+# Input data anggota keluarga
 def input_anggota(rt_key: str):
     st.subheader(f"Input Anggota Keluarga untuk RT {rt_key}")
-    
+
     with st.form(key=f"anggota_form", clear_on_submit=True):
         no_urut = st.number_input("No. Urut Anggota", min_value=1)
         nama_lengkap = st.text_input("Nama Lengkap")
@@ -70,11 +113,10 @@ def input_anggota(rt_key: str):
         no_kitap = st.text_input("No. KITAP")
         ayah = st.text_input("Nama Ayah")
         ibu = st.text_input("Nama Ibu")
-        
+
         submit_button = st.form_submit_button("Simpan Anggota Keluarga")
-        
+
         if submit_button:
-            # Simpan data anggota keluarga di CSV
             anggota_data = {
                 "no_urut": no_urut,
                 "nama_lengkap": nama_lengkap,
@@ -98,29 +140,3 @@ def input_anggota(rt_key: str):
             df = pd.concat([df, df_anggota], ignore_index=True)
             save_rt(rt_key, df)
             st.success("Data Anggota Keluarga berhasil disimpan!")
-
-# Main function untuk navigasi aplikasi
-def main():
-    st.sidebar.title("Navigasi")
-    page = st.sidebar.radio("Pilih Halaman", ["Dashboard", "Input Data KK", "Input Anggota Keluarga", "Lihat Data"])
-
-    # Pilih RT
-    rt_key = st.sidebar.radio("Pilih RT", ["rt1", "rt2", "rt3"])
-
-    if page == "Dashboard":
-        st.title("Dashboard Data")
-        st.write("Menampilkan statistik umum atau data terkait lainnya.")
-        
-    elif page == "Input Data KK":
-        input_kk(rt_key)
-        
-    elif page == "Input Anggota Keluarga":
-        input_anggota(rt_key)
-        
-    elif page == "Lihat Data":
-        df = load_rt(rt_key)
-        st.subheader(f"Data KK dan Anggota Keluarga RT {rt_key}")
-        st.dataframe(df)
-
-if __name__ == "__main__":
-    main()
