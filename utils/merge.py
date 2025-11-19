@@ -1,19 +1,16 @@
-# utils/merge.py
 import pandas as pd
 
-def group_by_kk(df: pd.DataFrame) -> dict:
-    """
-    Group dataframe by 'no_kk'.
-    Returns { no_kk: [record_dicts] }
-    """
-    if df.empty:
-        return {}
-    if "no_kk" not in df.columns:
-        raise KeyError("DataFrame harus memiliki kolom 'no_kk'.")
-    grouped = {kk: group.to_dict(orient="records") for kk, group in df.groupby("no_kk")}
-    return grouped
+def group_by_family(df):
+    grouped = df.groupby("no_kk")
+    families = []
 
-def get_family_members(df: pd.DataFrame, no_kk: str):
-    if df.empty:
-        return []
-    return df[df["no_kk"] == no_kk].to_dict(orient="records")
+    for kk, group in grouped:
+        data = {
+            "no_kk": kk,
+            "kepala": group.iloc[0]["nama_kepala_keluarga"],
+            "jumlah_anggota": len(group),
+            "detail": group.to_dict(orient="records")
+        }
+        families.append(data)
+
+    return families
