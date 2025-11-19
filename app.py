@@ -1,142 +1,106 @@
+# app.py
 import streamlit as st
+from utils.auth import login_widget, logout, current_user, check_credentials
+from utils.loader import load_all_warga, load_info, save_row_to_rt, save_full_dataframe_to_rt
+from utils.merge import group_by_kk
+from utils.stats import summary_by_rt
+from utils.ui import (
+    inject_css,
+    show_dashboard,
+    show_rt_overview,
+    show_data_kk,
+    show_rt_detail,
+    show_add_form,
+)
+from utils.logger import write_log
 import pandas as pd
-from utils.loader import load_rt, save_rt
-from utils.auth import check_password
-from utils.ui import inject_css, header
-from datetime import datetime
 
-# Set page configuration
-st.set_page_config(page_title="Bank Data RW 02", layout="wide", page_icon="🏘️")
+st.set_page_config(page_title="Bank Data RW 02 - Dusun Klotok", layout="wide", page_icon="🏘️")
 
-# Inject custom CSS
+# --- Authentication widget in sidebar ---
+_ = login_widget()
+user, role = current_user()
+
+# Sidebar navigation
 inject_css()
+st.sidebar.title("🏷 Navigasi")
+menu = st.sidebar.radio("Menu", ("Dashboard", "Data Keluarga (KK)", "Data Warga", "RT Detail", "Admin Panel"))
 
-# Header
-header()
+# logout button
+if st.sidebar.button("Logout"):
+    logout()
+    st.experimental_rerun()
 
-# Login untuk proteksi password
-def password_page():
-    st.subheader("Masukkan Password untuk Akses Data")
-    password = st.text_input("Password", type="password")
-    if password:
-        role = check_password(password)
-        if role:
-            st.session_state["role"] = role
-            st.success(f"Akses diberikan untuk {role}")
+# Load data & config
+df_all = load_all_warga()
+info = load_info()
+grouped = group_by_kk(df_all)
+summary_rt = summary_by_rt(df_all)
+
+# ROUTING
+if menu == "Dashboard":
+    # show dashboard metrics & charts
+    show_dashboard(df_all, info)
+    st.divider()
+    show_rt_overview(summary_rt)
+    st.divider()
+    # Add data button on dashboard
+    if st.session_state.get("open_add"):
+        # nothing: button toggles state only
+        pass
+    # show add form inline
+    new_row = show_add_form()
+    if new_row:
+        # Save and log
+        save_row_to_rt(new_row)
+        write_log(user or "anonymous", role or "unknown", "tambah", target=new_row.get("nik") or new_row.get("no_kk"), extra={"rt": new_row.get("rt")})
+        st.success("Data berhasil disimpan.")
+        st.experimental_rerun()
+
+elif menu == "Data Keluarga (KK)":
+    show_data_kk(grouped)
+
+elif menu == "Data Warga":
+    st.title("📋 Data Warga Seluruh RW")
+    st.dataframe(df_all, use_container_width=True)
+
+elif menu == "RT Detail":
+    st.title("📍 RT Detail")
+    # Choose RT to view
+    rt_choice = st.sidebar.selectbox("Pilih RT", sorted(df_all["rt"].dropna().unique().tolist()) if not df_all.empty else [1])
+    # Access control: if user is RT, only allow that RT; RW/Admin allow all
+    if user is None:
+        st.info("Silakan login untuk membuka detail RT (hanya user RT/RW/Admin dapat membuka).")
+    else:
+        # if role like 'rt1' or 'rt2' or 'rt3'
+        if role.startswith("rt"):
+            allowed_rt = int(role.replace("rt",""))
+            if allowed_rt != int(rt_choice):
+                st.error("Anda hanya dapat mengakses RT Anda sendiri.")
+            else:
+                df_rt = df_all[df_all["rt"] == int(rt_choice)]
+                show_rt_detail(df_rt)
+                write_log(user, role, "buka_rt_detail", target=f"rt{rt_choice}")
         else:
-            st.error("Password salah!")
+            # RW or Admin
+            df_rt = df_all[df_all["rt"] == int(rt_choice)]
+            show_rt_detail(df_rt)
+            write_log(user or "anonymous", role or "unknown", "buka_rt_detail", target=f"rt{rt_choice}")
 
-if "role" not in st.session_state:
-    password_page()
-
-else:
-    # Sidebar navigasi
-    st.sidebar.header("Navigasi")
-    page = st.sidebar.radio("Pilih Halaman", ["Dashboard", "Input Data KK", "Input Anggota Keluarga", "Lihat Data"])
-
-    rt_key = st.sidebar.radio("Pilih RT", ["rt1", "rt2", "rt3"])
-
-    if page == "Dashboard":
-        st.title("Dashboard Data")
-        st.write("Menampilkan statistik umum atau data terkait lainnya.")
-        df = load_rt(rt_key)
-        st.dataframe(df)
-
-    elif page == "Input Data KK":
-        input_kk(rt_key)
-
-    elif page == "Input Anggota Keluarga":
-        input_anggota(rt_key)
-
-    elif page == "Lihat Data":
-        df = load_rt(rt_key)
-        st.subheader(f"Data KK dan Anggota Keluarga RT {rt_key}")
-        st.dataframe(df)
-
-# Input data KK
-def input_kk(rt_key: str):
-    st.subheader(f"Input Data KK untuk RT {rt_key}")
-
-    with st.form(key=f"kk_form", clear_on_submit=True):
-        no_kk = st.text_input("Nomor KK")
-        nama_kepala_keluarga = st.text_input("Nama Kepala Keluarga")
-        alamat = st.text_input("Alamat")
-        rt = st.text_input("RT")
-        rw = st.text_input("RW")
-        kode_pos = st.text_input("Kode Pos")
-        desa_kelurahan = st.text_input("Desa/Kelurahan")
-        kecamatan = st.text_input("Kecamatan")
-        kabupaten_kota = st.text_input("Kabupaten/Kota")
-        provinsi = st.text_input("Provinsi")
-        tanggal_dikeluarkan = st.date_input("Tanggal Dikeluarkan")
-
-        submit_button = st.form_submit_button("Simpan Kartu Keluarga")
-
-        if submit_button:
-            kk_data = {
-                "no_kk": no_kk,
-                "nama_kepala_keluarga": nama_kepala_keluarga,
-                "alamat": alamat,
-                "rt": rt,
-                "rw": rw,
-                "kode_pos": kode_pos,
-                "desa_kelurahan": desa_kelurahan,
-                "kecamatan": kecamatan,
-                "kabupaten_kota": kabupaten_kota,
-                "provinsi": provinsi,
-                "tanggal_dikeluarkan": tanggal_dikeluarkan.strftime("%Y-%m-%d")
-            }
-            df_kk = pd.DataFrame([kk_data])
-            df = load_rt(rt_key)
-            df = pd.concat([df, df_kk], ignore_index=True)
-            save_rt(rt_key, df)
-            st.success("Data Kartu Keluarga berhasil disimpan!")
-
-# Input data anggota keluarga
-def input_anggota(rt_key: str):
-    st.subheader(f"Input Anggota Keluarga untuk RT {rt_key}")
-
-    with st.form(key=f"anggota_form", clear_on_submit=True):
-        no_urut = st.number_input("No. Urut Anggota", min_value=1)
-        nama_lengkap = st.text_input("Nama Lengkap")
-        nik = st.text_input("NIK")
-        jenis_kelamin = st.selectbox("Jenis Kelamin", ["Laki-laki", "Perempuan"])
-        tempat_lahir = st.text_input("Tempat Lahir")
-        tanggal_lahir = st.date_input("Tanggal Lahir")
-        agama = st.selectbox("Agama", ["Islam", "Kristen", "Katolik", "Hindu", "Budha", "Konghucu"])
-        pendidikan = st.selectbox("Pendidikan", ["Tidak Sekolah", "SD", "SMP", "SMA", "D1", "D2", "D3", "S1", "S2", "S3"])
-        jenis_pekerjaan = st.text_input("Jenis Pekerjaan")
-        status_perkawinan = st.selectbox("Status Perkawinan", ["Kawin", "Belum Kawin", "Cerai"])
-        status_hubungan_dalam_keluarga = st.selectbox("Status Hubungan dalam Keluarga", ["Kepala Keluarga", "Istri", "Anak"])
-        kewarganegaraan = st.selectbox("Kewarganegaraan", ["WNI", "WNA"])
-        no_paspor = st.text_input("No. Paspor")
-        no_kitap = st.text_input("No. KITAP")
-        ayah = st.text_input("Nama Ayah")
-        ibu = st.text_input("Nama Ibu")
-
-        submit_button = st.form_submit_button("Simpan Anggota Keluarga")
-
-        if submit_button:
-            anggota_data = {
-                "no_urut": no_urut,
-                "nama_lengkap": nama_lengkap,
-                "nik": nik,
-                "jenis_kelamin": jenis_kelamin,
-                "tempat_lahir": tempat_lahir,
-                "tanggal_lahir": tanggal_lahir.strftime("%Y-%m-%d"),
-                "agama": agama,
-                "pendidikan": pendidikan,
-                "jenis_pekerjaan": jenis_pekerjaan,
-                "status_perkawinan": status_perkawinan,
-                "status_hubungan_dalam_keluarga": status_hubungan_dalam_keluarga,
-                "kewarganegaraan": kewarganegaraan,
-                "no_paspor": no_paspor,
-                "no_kitap": no_kitap,
-                "ayah": ayah,
-                "ibu": ibu
-            }
-            df_anggota = pd.DataFrame([anggota_data])
-            df = load_rt(rt_key)
-            df = pd.concat([df, df_anggota], ignore_index=True)
-            save_rt(rt_key, df)
-            st.success("Data Anggota Keluarga berhasil disimpan!")
+elif menu == "Admin Panel":
+    # Only admin allowed
+    if role != "admin":
+        st.error("Hanya admin yang dapat mengakses panel ini.")
+    else:
+        st.title("⚙️ Admin Panel")
+        st.write("Fitur admin: lihat log, export, dan manajemen pengguna.")
+        # show logs
+        log_path = "data/log/activity.log"
+        try:
+            with open(log_path, "r", encoding="utf-8") as f:
+                lines = f.read().strip().splitlines()
+            st.subheader("Activity Log (terbaru paling bawah)")
+            for ln in lines[-200:]:
+                st.text(ln)
+        except FileNotFoundError:
+            st.info("Belum ada log aktivitas.")
