@@ -1,16 +1,19 @@
-def group_by_kk(df):
-    """
-    Mengelompokkan warga berdasarkan nomor KK.
-    Output: dict {no_kk: list anggota}
-    """
-    return {
-        kk: group.to_dict(orient="records")
-        for kk, group in df.groupby("no_kk")
-    }
+# utils/merge.py
+import pandas as pd
 
+def group_by_kk(df: pd.DataFrame) -> dict:
+    """
+    Group dataframe by 'no_kk'.
+    Returns { no_kk: [record_dicts] }
+    """
+    if df.empty:
+        return {}
+    if "no_kk" not in df.columns:
+        raise KeyError("DataFrame harus memiliki kolom 'no_kk'.")
+    grouped = {kk: group.to_dict(orient="records") for kk, group in df.groupby("no_kk")}
+    return grouped
 
-def get_kepala_keluarga(anggota):
-    for orang in anggota:
-        if orang.get("hubungan_keluarga", "").lower() in ["kepala keluarga", "kepala"]:
-            return orang["nama"]
-    return "(Tidak ada kepala keluarga)"
+def get_family_members(df: pd.DataFrame, no_kk: str):
+    if df.empty:
+        return []
+    return df[df["no_kk"] == no_kk].to_dict(orient="records")
