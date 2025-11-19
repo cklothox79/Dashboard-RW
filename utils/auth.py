@@ -1,20 +1,42 @@
 import yaml
-from pathlib import Path
+import streamlit as st
 
-CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "passwords.yaml"
+# Load password config
+def load_passwords(path="config/passwords.yaml"):
+    with open(path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)["passwords"]
 
-def load_passwords():
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f)
-    return data.get("passwords", {})
+PASSWORDS = load_passwords()
 
-def check_password(entered_password: str):
-    """
-    Return role key if password matches one of entries, else None.
-    Roles: rt1, rt2, rt3, rw, admin
-    """
-    pw = load_passwords()
-    for role, p in pw.items():
-        if entered_password == p:
-            return role
-    return None
+# Role-based login
+def authenticate():
+    st.sidebar.subheader("🔐 Login Akses")
+
+    role = st.sidebar.selectbox(
+        "Pilih Role",
+        ["RT 1", "RT 2", "RT 3", "RW", "Admin"]
+    )
+
+    password = st.sidebar.text_input("Masukkan Password", type="password")
+
+    if st.sidebar.button("Login"):
+        key = role.lower().replace(" ", "")
+        if password == PASSWORDS.get(key):
+            st.session_state["role"] = role
+            st.success(f"Login berhasil sebagai **{role}**")
+        else:
+            st.error("Password salah!")
+
+    return st.session_state.get("role", None)
+
+
+# Authorization limit
+def filter_by_role(df, role):
+    if role == "Admin":
+        return df
+    if role == "RW":
+        return df  # akses semua warga 1 RW
+    if "RT" in role:
+        num = role.split(" ")[1]
+        return df[df["rt"] == int(num)]
+    return df
